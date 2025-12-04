@@ -1,10 +1,12 @@
 import { useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useSearchParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Eye, EyeOff, ArrowLeft, Home, Hammer, ShoppingBag, Check } from "lucide-react";
+import { Eye, EyeOff, ArrowLeft, Home, Hammer, ShoppingBag, Check, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
+import { toast } from "sonner";
 
 type UserRole = "homeowner" | "contractor" | "buyer";
 
@@ -36,12 +38,15 @@ const roles = [
 ];
 
 const Register = () => {
+  const navigate = useNavigate();
+  const { signUp } = useAuth();
   const [searchParams] = useSearchParams();
   const initialRole = searchParams.get("role") as UserRole | null;
   
   const [selectedRole, setSelectedRole] = useState<UserRole | null>(initialRole);
   const [step, setStep] = useState(initialRole ? 2 : 1);
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
   
   const [formData, setFormData] = useState({
     firstName: "",
@@ -62,10 +67,61 @@ const Register = () => {
     setStep(2);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const validateForm = () => {
+    if (!formData.firstName || !formData.lastName) {
+      toast.error("Please enter your full name");
+      return false;
+    }
+    if (!formData.email) {
+      toast.error("Please enter your email");
+      return false;
+    }
+    if (!formData.password || formData.password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return false;
+    }
+    if (selectedRole === "contractor" && !formData.company) {
+      toast.error("Please enter your company name");
+      return false;
+    }
+    return true;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // TODO: Implement registration logic with Supabase
-    console.log("Register:", { role: selectedRole, ...formData });
+    
+    if (!validateForm() || !selectedRole) return;
+
+    setLoading(true);
+    
+    const metadata = {
+      first_name: formData.firstName,
+      last_name: formData.lastName,
+      phone: formData.phone,
+      company: formData.company,
+      zip_codes: formData.zipCodes,
+      role: selectedRole,
+    };
+
+    const { error } = await signUp(formData.email, formData.password, metadata);
+    setLoading(false);
+
+    if (error) {
+      if (error.message.includes("User already registered")) {
+        toast.error("An account with this email already exists. Please sign in.");
+      } else {
+        toast.error(error.message);
+      }
+      return;
+    }
+
+    if (selectedRole === "homeowner") {
+      toast.success("Account created successfully!");
+      navigate("/dashboard");
+    } else {
+      toast.success("Account created! Redirecting to payment...");
+      navigate("/dashboard");
+    }
   };
 
   return (
@@ -165,6 +221,7 @@ const Register = () => {
                       value={formData.firstName}
                       onChange={handleInputChange}
                       className="h-11"
+                      disabled={loading}
                     />
                   </div>
                   <div className="space-y-2">
@@ -175,6 +232,7 @@ const Register = () => {
                       value={formData.lastName}
                       onChange={handleInputChange}
                       className="h-11"
+                      disabled={loading}
                     />
                   </div>
                 </div>
@@ -188,6 +246,7 @@ const Register = () => {
                     value={formData.email}
                     onChange={handleInputChange}
                     className="h-11"
+                    disabled={loading}
                   />
                 </div>
 
@@ -200,6 +259,7 @@ const Register = () => {
                     value={formData.phone}
                     onChange={handleInputChange}
                     className="h-11"
+                    disabled={loading}
                   />
                 </div>
 
@@ -213,6 +273,7 @@ const Register = () => {
                         value={formData.company}
                         onChange={handleInputChange}
                         className="h-11"
+                        disabled={loading}
                       />
                     </div>
                     <div className="space-y-2">
@@ -223,6 +284,7 @@ const Register = () => {
                         value={formData.zipCodes}
                         onChange={handleInputChange}
                         className="h-11"
+                        disabled={loading}
                       />
                       <p className="text-xs text-muted-foreground">
                         Enter the ZIP codes you serve, separated by commas
@@ -241,6 +303,7 @@ const Register = () => {
                       value={formData.password}
                       onChange={handleInputChange}
                       className="h-11 pr-12"
+                      disabled={loading}
                     />
                     <button
                       type="button"
@@ -269,8 +332,16 @@ const Register = () => {
                   className="w-full h-12"
                   variant={selectedRole === "homeowner" ? "homeowner" : selectedRole === "contractor" ? "contractor" : "buyer"}
                   size="lg"
+                  disabled={loading}
                 >
-                  {selectedRole === "homeowner" ? "Create Free Account" : "Continue to Payment"}
+                  {loading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Creating account...
+                    </>
+                  ) : (
+                    selectedRole === "homeowner" ? "Create Free Account" : "Continue to Payment"
+                  )}
                 </Button>
 
                 <p className="text-xs text-center text-muted-foreground">
